@@ -104,9 +104,10 @@
   }, (i) => {
     if (over) return setMsg('このゲームは終了しています。「新しいゲーム」を押してください。', 'ng');
     const t = MONS[target], g = MONS[i];
-    if (g.fam === t.fam) {
+    // 覚えるわざが完全に同じ(=わざでは区別できない)同じ進化系統のポケモンは正解扱い
+    if (i === target || (g.fam === t.fam && g.mv.join() === t.mv.join())) {
       over = true;
-      const note = i === target ? '' : `(正解は${t.name}。同じ進化系統なので正解扱い)`;
+      const note = i === target ? '' : `(正解は${t.name}。わざでは区別できないため正解扱い)`;
       setImg($('aImg'), target);
       setMsg(`正解! ${g.name} ― 質問${asked.length}回・はずれ${misses}回 ${note}`, 'ok');
     } else {

@@ -38,18 +38,43 @@ const list = await get(API + 'pokemon?limit=2000');
 console.log('pokemon entries', list.results.length);
 const mons = (await pool(list.results, 8, async (r, k) => {
   const p = await get(r.url);
-  const moves = [];
+  const moves = [], egg = [];
   for (const m of p.moves) {
-    if (m.version_group_details.some(d => d.version_group.name === VG)) moves.push(m.move.name);
+    const ds = m.version_group_details.filter(d => d.version_group.name === VG);
+    if (ds.length) moves.push(m.move.name);
+    if (ds.some(d => d.move_learn_method.name === 'egg')) egg.push(m.move.name);
   }
   if (!moves.length) return null;
-  return { id: p.id, name: p.name, species: p.species.url, isDefault: p.is_default, moves };
+  return { id: p.id, name: p.name, species: p.species.url, isDefault: p.is_default, moves, egg };
 })).filter(Boolean);
 console.log('SV pokemon', mons.length);
 
 const speciesUrls = [...new Set(mons.map(m => m.species))];
 const speciesMap = {};
 await pool(speciesUrls, 8, async (u) => { speciesMap[u] = await get(u); });
+
+// タマゴわざは進化前の段階で覚えたものを進化後も引き継ぐが、PokeAPI は中間進化形で欠落していることがある(例: カラスバ)。
+// 進化元をたどってタマゴわざを補完する(地方フォルムは同じフォルムの進化元を優先)。
+const byName = Object.fromEntries(mons.map(m => [m.name, m]));
+const spByUrl = speciesMap;
+const speciesByName = Object.fromEntries(Object.values(speciesMap).map(sp => [sp.name, sp]));
+let patched = 0;
+for (const m of mons) {
+  const sp = spByUrl[m.species];
+  const suffix = m.name.startsWith(sp.name + '-') ? m.name.slice(sp.name.length + 1) : '';
+  const add = new Set();
+  for (let cur = sp; cur.evolves_from_species; ) {
+    const anc = cur.evolves_from_species.name;
+    const a = (suffix && byName[anc + '-' + suffix]) || byName[anc];
+    if (a) a.egg.forEach(e => add.add(e));
+    cur = speciesByName[anc];
+    if (!cur) break;
+  }
+  const have = new Set(m.moves);
+  const miss = [...add].filter(e => !have.has(e));
+  if (miss.length) { m.moves.push(...miss); patched++; console.log('補完', m.name, miss.join(',')); }
+}
+console.log('タマゴわざを補完したポケモン', patched);
 
 const moveSlugs = [...new Set(mons.flatMap(m => m.moves))].sort();
 const moveInfo = {};

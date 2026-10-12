@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>わざでポケモン当てゲーム</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>わざでポケモン当てゲーム</h1>
+  <p class="sub">スカーレット・バイオレットに登場するポケモンを、覚えるわざから特定するゲームです。</p>
+  <label class="imgopt"><input type="checkbox" id="imgToggle"> ポケモンの画像を表示する</label>
+</header>
+<nav class="tabs"><button id="tabB">モードA: わざの組み合わせで特定する</button><button id="tabA">モードB: 質問して当てる</button></nav>
+<main id="modeA">
+  <section class="panel" id="ask">
+    <h2>① わざで質問する</h2>
+    <div class="combo">
+      <input id="moveInput" type="text" placeholder="わざ名を入力(ひらがなOK)" autocomplete="off">
+      <ul id="moveList" class="suggest" hidden></ul>
+    </div>
+    <p class="hint">候補を選ぶと「このポケモンはそのわざを覚える?」と質問します(レベル・マシン・タマゴ・教えわざすべて対象)。</p>
+    <div class="status"><span>質問 <b id="qCount">0</b></span><span>はずれ <b id="missCount">0</b></span><span>候補 <b id="candCount">-</b></span></div>
+    <ul id="history"></ul>
+  </section>
+  <section class="panel" id="answer">
+    <h2>② ポケモンを答える</h2>
+    <div class="combo">
+      <input id="monInput" type="text" placeholder="ポケモン名を入力" autocomplete="off">
+      <ul id="monList" class="suggest" hidden></ul>
+    </div>
+    <img id="aImg" class="mon" alt="" hidden referrerpolicy="no-referrer">
+    <p id="msg" class="msg"></p>
+    <div class="row">
+      <button id="candBtn">残り候補を見る</button>
+      <button id="giveUp">あきらめる</button>
+      <button id="restart" class="primary">新しいゲーム</button>
+    </div>
+    <ul id="cands" hidden></ul>
+  </section>
+</main>
+<main id="modeB" hidden>
+  <section class="panel">
+    <h2>お題のポケモン</h2>
+    <div class="combo">
+      <input id="bPick" type="text" placeholder="お題を自分で指定(ポケモン名を入力)" autocomplete="off">
+      <ul id="bPickList" class="suggest" hidden></ul>
+    </div>
+    <div class="targetBox"><img id="bImg" class="mon" alt="" referrerpolicy="no-referrer"><div><div class="target" id="bTarget"></div><div class="hint">最小は <b id="bMin">-</b> 個のわざで特定できます</div></div></div>
+    <p class="hint">詳細検索と同じく、選んだわざを<b>すべて覚える</b>ポケモンが検索結果に出ます。結果をお題のポケモン(と同じ進化系統・ドーブル)だけにしてください。少ないわざ数ほど高評価です。</p>
+    <div class="combo">
+      <input id="bInput" type="text" placeholder="覚えるわざを絞り込み(ひらがなOK)" autocomplete="off">
+    </div>
+    <div id="bGrid" class="grid"></div>
+    <div id="bChips" class="chips"></div>
+    <p id="bMsg" class="msg"></p>
+    <div class="row">
+      <button id="bHintBtn">ヒント</button>
+      <button id="bHint">答え</button>
+      <button id="bClear">わざをクリア</button>
+      <button id="bNext" class="primary">次の問題</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>検索結果 <span id="bCount"></span></h2>
+    <ul id="bResult" class="result"></ul>
+  </section>
+</main>
+<footer>データ: PokeAPI(スカーレット・バイオレットの習得わざ)。わざだけでは区別できない進化前後・同じ進化系統のポケモンとドーブルも正解になります。</footer>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -249,6 +249,7 @@
   const setMode = (b) => {
     try { localStorage.setItem(MODE_KEY, b ? 'combo' : 'ask'); } catch (e) { /* 保存できなくても動作に影響なし */ }
     $('modeA').hidden = b; $('modeB').hidden = !b;
+    $('noteCombo').hidden = !b; $('noteAsk').hidden = b;
     $('tabA').classList.toggle('on', !b); $('tabB').classList.toggle('on', b);
   };
   $('tabA').addEventListener('click', () => setMode(false));

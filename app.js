@@ -104,9 +104,9 @@
   }, (i) => {
     if (over) return setMsg('このゲームは終了しています。「新しいゲーム」を押してください。', 'ng');
     const t = MONS[target], g = MONS[i];
-    if (g.all || g.fam === t.fam) {
+    if (g.fam === t.fam) {
       over = true;
-      const note = i === target ? '' : g.all ? '(ドーブルはわざだけでは区別できないため正解扱い)' : `(正解は${t.name}。同じ進化系統なので正解扱い)`;
+      const note = i === target ? '' : `(正解は${t.name}。同じ進化系統なので正解扱い)`;
       setImg($('aImg'), target);
       setMsg(`正解! ${g.name} ― 質問${asked.length}回・はずれ${misses}回 ${note}`, 'ok');
     } else {

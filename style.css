@@ -49,3 +49,5 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .grid button.mv.sel{background:var(--acc);border-color:var(--acc);color:#fff}
 .imgopt{display:inline-flex;gap:6px;align-items:center;font-size:.9rem;color:var(--mut);margin-top:6px}
 .imgopt input{width:auto}
+.pickRow{display:flex;gap:8px;align-items:flex-start}
+.pickRow .combo{flex:1}

@@ -43,9 +43,12 @@
 <main id="modeB" hidden>
   <section class="panel">
     <h2>お題のポケモン</h2>
-    <div class="combo">
-      <input id="bPick" type="text" placeholder="お題を自分で指定(ポケモン名を入力)" autocomplete="off">
-      <ul id="bPickList" class="suggest" hidden></ul>
+    <div class="pickRow">
+      <div class="combo">
+        <input id="bPick" type="text" placeholder="お題を自分で指定(ポケモン名を入力して選ぶ)" autocomplete="off">
+        <ul id="bPickList" class="suggest" hidden></ul>
+      </div>
+      <button id="bPickBtn">設定</button>
     </div>
     <div class="targetBox"><img id="bImg" class="mon" alt="" referrerpolicy="no-referrer"><div><div class="target" id="bTarget"></div><div class="hint">最小は <b id="bMin">-</b> 個のわざで特定できます</div></div></div>
     <p class="hint">詳細検索と同じく、選んだわざを<b>すべて覚える</b>ポケモンが検索結果に出ます。結果をお題のポケモン(と同じ進化系統・ドーブル)だけにしてください。少ないわざ数ほど高評価です。</p>

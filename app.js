@@ -54,7 +54,8 @@
     candidates().forEach((i) => { const li = document.createElement('li'); li.textContent = MONS[i].name; ul.appendChild(li); });
   }
 
-  function combo(input, list, search, onPick) {
+  // keep=true: 選んだ名前を入力欄に残す(別ボタンで確定する欄用)
+  function combo(input, list, search, onPick, keep = false) {
     let items = [], cur = -1;
     const close = () => { list.hidden = true; cur = -1; };
     const draw = () => {
@@ -71,10 +72,17 @@
       });
       list.hidden = !items.length;
     };
-    const pick = (n) => { const it = items[n]; if (!it || it.used) return; close(); input.value = ''; onPick(it.value); };
+    const pick = (n) => {
+      const it = items[n]; if (!it || it.used) return;
+      close(); items = [];
+      input.value = keep ? it.label : '';
+      input.focus(); // 続けて入力できるようフォーカスを保つ
+      onPick(it.value);
+    };
     input.addEventListener('input', () => { items = search(kata(input.value)); cur = items.length ? 0 : -1; draw(); });
     input.addEventListener('blur', close);
     input.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return; // IME変換中のキーは無視
       if (e.key === 'ArrowDown') { cur = Math.min(items.length - 1, cur + 1); draw(); e.preventDefault(); }
       else if (e.key === 'ArrowUp') { cur = Math.max(0, cur - 1); draw(); e.preventDefault(); }
       else if (e.key === 'Enter') pick(cur);
@@ -220,6 +228,7 @@
       const b = document.createElement('button');
       b.className = 'mv' + (bMoves.includes(m) ? ' sel' : '');
       b.textContent = MOVES[m].n; b.title = TYPE_JA[MOVES[m].t] || MOVES[m].t;
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // 絞り込み欄のフォーカスを維持
       b.addEventListener('click', () => {
         const k = bMoves.indexOf(m);
         if (k >= 0) bMoves.splice(k, 1); else bMoves.push(m);
@@ -235,6 +244,20 @@
   $('bHintBtn').addEventListener('click', () => {
     if (bHintMove === null) { const sol = bOptimal(); bHintMove = sol[Math.floor(Math.random() * sol.length)]; }
     bMsg(MOVES[bHintMove].n, '');
+  });
+  // お題の指定: 候補を選んで「設定」ボタンで反映する
+  let bPickIdx = null;
+  combo($('bPick'), $('bPickList'), (q) => {
+    if (!q) return [];
+    return find(monKey, q).map((i) => ({ value: i, label: MONS[i].name, sub: '#' + MONS[i].dex }));
+  }, (i) => { bPickIdx = i; }, true);
+  $('bPick').addEventListener('input', () => { bPickIdx = null; });
+  $('bPickBtn').addEventListener('click', () => {
+    let i = bPickIdx;
+    if (i === null) { const k = kata($('bPick').value); i = k ? monKey.indexOf(k) : -1; if (i < 0) i = null; }
+    if (i === null) return bMsg('候補からお題のポケモンを選んでから「設定」を押してください', 'ng');
+    $('bPick').value = ''; bPickIdx = null;
+    bNew(i);
   });
   $('bNext').addEventListener('click', () => bNew());
   $('bClear').addEventListener('click', () => { bMoves = []; bDone = false; bMsg('', ''); bRender(); });

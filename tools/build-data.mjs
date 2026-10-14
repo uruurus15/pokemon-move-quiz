@@ -45,7 +45,7 @@ const mons = (await pool(list.results, 8, async (r, k) => {
     if (ds.some(d => d.move_learn_method.name === 'egg')) egg.push(m.move.name);
   }
   if (!moves.length) return null;
-  return { id: p.id, name: p.name, species: p.species.url, isDefault: p.is_default, moves, egg };
+  return { id: p.id, name: p.name, species: p.species.url, isDefault: p.is_default, form: p.forms[0] && p.forms[0].url, moves, egg };
 })).filter(Boolean);
 console.log('SV pokemon', mons.length);
 
@@ -86,26 +86,43 @@ const moveOut = moveSlugs.map(s => {
   return { n: ja(m.names), t: m.type.name, c: m.damage_class.name };
 });
 
+// フォルム名は PokeAPI の pokemon-form(form_names の日本語)から取得する。無いものだけ FORM の簡易表記で補う
+const formJa = {};
+await pool(mons.filter(m => !m.isDefault && m.form), 8, async (m) => {
+  const f = await get(m.form);
+  const n = (f.form_names || []).find(x => x.language.name === 'ja');
+  if (n) formJa[m.name] = n.name;
+});
+// ケンタロス(パルデア)の3種。PokeAPI の日本語フォルム名は3種とも同じ「パルデアのすがた」のため、種名はポケモンWiki等の公式表記で補う
+const BREED = { 'paldea-combat-breed': 'コンバット種', 'paldea-blaze-breed': 'ブレイズ種', 'paldea-aqua-breed': 'ウォーター種' };
+
 const out = mons.map(m => {
   const sp = speciesMap[m.species];
-  let name = ja(sp.names);
+  const spJa = ja(sp.names);
+  let name = spJa;
   const suffix = m.name.startsWith(sp.name + '-') ? m.name.slice(sp.name.length + 1) : '';
-  if (!m.isDefault && suffix) name += `(${FORM[suffix] || suffix})`;
+  if (!m.isDefault && suffix) {
+    const f = formJa[m.name];
+    if (f) name = f.includes(spJa) ? f : `${spJa}(${f}${BREED[suffix] ? ' ' + BREED[suffix] : ''})`;
+    else name += `(${FORM[suffix] || suffix})`;
+  }
   return {
     id: m.id, dex: sp.id, name,
     fam: Number(sp.evolution_chain.url.split('/').filter(Boolean).pop()),
     mv: m.moves.map(s => moveIdx[s]).sort((a, b) => a - b),
+    _s: suffix, _d: m.isDefault,
   };
 }).sort((a, b) => a.dex - b.dex || a.id - b.id);
 
 // 見た目だけのフォルム(習得わざが基本フォルムと同一)は統合する。地方フォルムは別個体として残す
-const REGIONAL = /(アローラ|ガラル|ヒスイ|パルデア)/;
+const REGIONAL = /^(alola|galar|hisui|paldea)/;
+const NOISE = /(-cap|^ash$|busted|own-tempo|build|mode|female|white-striped|original|dada|crowned)/;
 const sig = (p) => p.mv.join(',');
 const baseSig = {};
-out.forEach((p) => { if (!/\(/.test(p.name)) baseSig[p.dex] = sig(p); });
-const NOISE = /(-cap|ash|busted|own-tempo|build|mode|female|white-striped|original|dada|crowned)/;
-const dedup = out.filter((p) => !/\(/.test(p.name) || REGIONAL.test(p.name) || (!NOISE.test(p.name) && baseSig[p.dex] !== sig(p)));
+out.forEach((p) => { if (p._d) baseSig[p.dex] = sig(p); });
+const dedup = out.filter((p) => p._d || (!NOISE.test(p._s) && (REGIONAL.test(p._s) || baseSig[p.dex] !== sig(p))));
 out.length = 0; out.push(...dedup);
+out.forEach((p) => { delete p._s; delete p._d; });
 const smeargle = out.find(p => p.name === 'ドーブル');
 if (smeargle) smeargle.all = true;
 fs.writeFileSync(path.join(root, 'data.js'),

@@ -2,31 +2,31 @@
   const { moves: MOVES, pokemon: MONS } = window.POKE_DATA;
   const $ = (id) => document.getElementById(id);
   const TYPE_JA = { normal: 'ノーマル', fire: 'ほのお', water: 'みず', electric: 'でんき', grass: 'くさ', ice: 'こおり', fighting: 'かくとう', poison: 'どく', ground: 'じめん', flying: 'ひこう', psychic: 'エスパー', bug: 'むし', rock: 'いわ', ghost: 'ゴースト', dragon: 'ドラゴン', dark: 'あく', steel: 'はがね', fairy: 'フェアリー', stellar: 'ステラ' };
-  // ひらがな→カタカナに寄せて部分一致検索する
-  const kata = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)).replace(/\s+/g, '');
+  // 検索用の正規化: 全角英数→半角(NFKC)、ひらがな→カタカナ、空白除去。表示名はそのまま
+  const kata = (s) => s.normalize('NFKC').replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)).replace(/\s+/g, '');
   const moveKey = MOVES.map((m) => kata(m.n));
   const monKey = MONS.map((p) => kata(p.name));
   // all=true(ドーブル)は全わざを覚える扱い
   const moveSets = MONS.map((p) => (p.all ? null : new Set(p.mv)));
   const learns = (i, mv) => moveSets[i] === null || moveSets[i].has(mv);
 
-  let target, asked, misses, over;
+  let target, asked, misses, over, wrong;
 
   function newGame() {
     const pool = MONS.map((p, i) => i).filter((i) => !MONS[i].all);
     target = pool[Math.floor(Math.random() * pool.length)];
-    asked = []; misses = 0; over = false; $('aImg').hidden = true;
+    asked = []; misses = 0; over = false; wrong = new Set(); $('aImg').hidden = true;
     $('moveInput').value = ''; $('monInput').value = '';
     $('cands').hidden = true;
     setMsg('', '');
     render();
   }
 
-  // ドーブルは常に候補に残る
+  // ドーブルは答えにならないため候補に含めない
   function candidates() {
     const out = [];
     MONS.forEach((p, i) => {
-      if (moveSets[i] === null || asked.every((q) => learns(i, q.mv) === q.yes)) out.push(i);
+      if (!p.all && asked.every((q) => learns(i, q.mv) === q.yes)) out.push(i);
     });
     return out;
   }
@@ -119,20 +119,22 @@
       setImg($('aImg'), target);
       setMsg(`正解! ${g.name} ― 質問${asked.length}回・はずれ${misses}回 ${note}`, 'ok');
     } else {
-      misses++; setMsg(`${g.name}ではありません…`, 'ng'); render();
+      if (wrong.has(i)) return setMsg(`${g.name}は回答済みです(はずれ)`, 'ng');
+      wrong.add(i); misses++; setMsg(`${g.name}ではありません…`, 'ng'); render();
     }
   });
 
   $('candBtn').addEventListener('click', () => { if ($('cands').hidden) showCands(); else $('cands').hidden = true; });
   $('giveUp').addEventListener('click', () => {
     if (over) return; over = true;
+    setImg($('aImg'), target);
     setMsg(`正解は ${MONS[target].name} でした`, 'ng');
   });
   $('restart').addEventListener('click', newGame);
   newGame();
 
   // ===== モードB: わざの組み合わせで特定 =====
-  let bt, bMoves, bDone, bMin, bHintMove;
+  let bt, bMoves, bDone, bMin, bHintMove, bNote;
   const accepted = (i) => MONS[i].all || MONS[i].fam === MONS[bt].fam;
   const bResults = () => MONS.map((p, i) => i).filter((i) => bMoves.every((m) => learns(i, m)));
   const bSolved = (res) => bMoves.length > 0 && res.every(accepted) && res.includes(bt);
@@ -140,12 +142,21 @@
   // 最小個数のわざの組み合わせを総当たりで求める(ビット集合のAND)
   const W = Math.ceil(MONS.length / 32);
   const bitsOf = (m) => { const b = new Uint32Array(W); MONS.forEach((p, i) => { if (learns(i, m)) b[i >> 5] |= 1 << (i & 31); }); return b; };
+  const optCache = new Map();
   function bOptimal() {
+    if (!optCache.has(bt)) optCache.set(bt, solveOptimal());
+    return optCache.get(bt).slice();
+  }
+  function solveOptimal() {
     const bad = new Uint32Array(W);
     MONS.forEach((p, i) => { if (!accepted(i)) bad[i >> 5] |= 1 << (i & 31); });
     const cand = MONS[bt].mv, bits = cand.map(bitsOf);
     const hit = (cur) => { for (let w = 0; w < W; w++) if (cur[w] & bad[w]) return true; return false; };
     const all = new Uint32Array(W).fill(0xffffffff);
+    // 覚えるわざを全部選んでも他の系統が残るなら、どの組み合わせでも特定できない(総当たりを省く)
+    const full = new Uint32Array(W).fill(0xffffffff);
+    bits.forEach((b) => { for (let w = 0; w < W; w++) full[w] &= b[w]; });
+    if (hit(full)) return [];
     for (let k = 1; k <= 6; k++) {
       const pick = [];
       const rec = (start, cur) => {
@@ -182,7 +193,7 @@
       // 「覚えるわざ」のAND検索だけでは特定できないポケモン(コイキング等)はランダム出題しない
       do { bt = pool[Math.floor(Math.random() * pool.length)]; bMin = bOptimal().length; } while (!bMin);
     }
-    bMoves = []; bDone = false; bHintMove = null; $('bInput').value = '';
+    bMoves = []; bDone = false; bHintMove = null; bNote = ''; $('bInput').value = '';
     $('bHintBtn').disabled = bMin < 2;
     $('bHintBtn').title = bMin < 2 ? '最小1個の問題ではヒントはありません' : '';
     $('bMin').textContent = bMin || '特定不能';
@@ -200,7 +211,7 @@
     bMoves.forEach((m, k) => {
       const d = document.createElement('span'); d.className = 'chip';
       const x = document.createElement('button'); x.textContent = '×';
-      x.addEventListener('click', () => { bMoves.splice(k, 1); bDone = false; bMsg('', ''); bRender(); });
+      x.addEventListener('click', () => { bMoves.splice(k, 1); bDone = false; bRender(); });
       d.append(MOVES[m].n, x); chips.appendChild(d);
     });
     bGrid();
@@ -215,7 +226,7 @@
     else if (bSolved(res)) {
       bDone = true;
       bMsg(`成功! ${bMoves.length}個のわざで特定(最小は${bMin}個${bMoves.length <= bMin ? ' — 最小達成!' : ''})`, 'ok');
-    } else if (!bDone) bMsg('', '');
+    } else if (!bDone) bMsg(bNote, '');
   }
   const bMsg = (t, c) => { $('bMsg').textContent = t; $('bMsg').className = 'msg ' + c; };
 
@@ -243,7 +254,7 @@
   // ヒント: 最小解に含まれるわざを1個だけ教える(問題ごとに固定)
   $('bHintBtn').addEventListener('click', () => {
     if (bHintMove === null) { const sol = bOptimal(); bHintMove = sol[Math.floor(Math.random() * sol.length)]; }
-    bMsg(MOVES[bHintMove].n, '');
+    bNote = MOVES[bHintMove].n; bMsg(bNote, '');
   });
   // お題の指定: 候補を選んで「設定」ボタンで反映する
   let bPickIdx = null;
@@ -260,8 +271,11 @@
     bNew(i);
   });
   $('bNext').addEventListener('click', () => bNew());
-  $('bClear').addEventListener('click', () => { bMoves = []; bDone = false; bMsg('', ''); bRender(); });
-  $('bHint').addEventListener('click', () => bMin ? bMsg('答え: ' + bOptimal().map((m) => MOVES[m].n).join(' + '), '') : bMsg('このポケモンは「覚えるわざ」の組み合わせだけでは特定できません', 'ng'));
+  $('bClear').addEventListener('click', () => { bMoves = []; bDone = false; bRender(); });
+  $('bHint').addEventListener('click', () => {
+    bNote = bMin ? '答え: ' + bOptimal().map((m) => MOVES[m].n).join(' + ') : 'このポケモンは「覚えるわざ」の組み合わせだけでは特定できません';
+    bMsg(bNote, bMin ? '' : 'ng');
+  });
   $('imgToggle').checked = showImg;
   $('imgToggle').addEventListener('change', () => {
     showImg = $('imgToggle').checked;

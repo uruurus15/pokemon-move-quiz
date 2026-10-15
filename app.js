@@ -58,6 +58,7 @@
   function combo(input, list, search, onPick, keep = false) {
     let items = [], cur = -1;
     let composing = false, picking = false; // IME変換中 / 候補確定の処理中
+    let lastTouch = 0; // 直近のタッチ確定時刻(後続の疑似マウスイベントを無視する)
     const close = () => { list.hidden = true; cur = -1; };
     const draw = () => {
       list.innerHTML = '';
@@ -68,18 +69,31 @@
         const a = document.createElement('span'); a.textContent = it.label;
         const b = document.createElement('small'); b.textContent = it.sub || '';
         li.append(a, b);
-        li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(n); });
+        li.addEventListener('mousedown', (e) => { e.preventDefault(); if (Date.now() - lastTouch > 600) pick(n); });
+        // iPad/iPhoneのSafariは、タップすると(mousedownを止めても)入力欄が外れてキーボードが閉じる。
+        // タップはtouchendで確定してブラウザ既定の処理(疑似マウスイベント・フォーカス移動)を止める。スクロール操作は除く
+        let sx = 0, sy = 0, moved = false;
+        li.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; moved = false; }, { passive: true });
+        li.addEventListener('touchmove', (e) => { const t = e.touches[0]; if (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8) moved = true; }, { passive: true });
+        li.addEventListener('touchend', (e) => {
+          if (moved) return;
+          if (e.cancelable) e.preventDefault();
+          lastTouch = Date.now();
+          pick(n, true);
+        }, { passive: false });
         list.appendChild(li);
       });
       list.hidden = !items.length;
     };
-    const pick = (n) => {
+    const pick = (n, touch = false) => {
       const it = items[n]; if (!it || it.used) return;
       close(); items = [];
       picking = true;
       // 変換中に値を書き換えるとIMEが固まり、入力欄を押し直すまで打てなくなるため、
       // いったんフォーカスを外して変換を確定させてから値を入れ替える
-      if (composing) { input.blur(); composing = false; }
+      // (タッチ操作ではblurするとキーボードが閉じるため、フォーカスを保ったまま値だけ入れ替える)
+      if (composing && !touch) input.blur();
+      composing = false;
       input.value = keep ? it.label : '';
       input.focus(); // 続けて入力できるようフォーカスを保つ
       picking = false;

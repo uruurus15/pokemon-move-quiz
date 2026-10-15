@@ -57,6 +57,7 @@
   // keep=true: 選んだ名前を入力欄に残す(別ボタンで確定する欄用)
   function combo(input, list, search, onPick, keep = false) {
     let items = [], cur = -1;
+    let composing = false, picking = false; // IME変換中 / 候補確定の処理中
     const close = () => { list.hidden = true; cur = -1; };
     const draw = () => {
       list.innerHTML = '';
@@ -75,11 +76,24 @@
     const pick = (n) => {
       const it = items[n]; if (!it || it.used) return;
       close(); items = [];
+      picking = true;
+      // 変換中に値を書き換えるとIMEが固まり、入力欄を押し直すまで打てなくなるため、
+      // いったんフォーカスを外して変換を確定させてから値を入れ替える
+      if (composing) { input.blur(); composing = false; }
       input.value = keep ? it.label : '';
       input.focus(); // 続けて入力できるようフォーカスを保つ
+      picking = false;
+      if (document.activeElement !== input) setTimeout(() => input.focus(), 0);
       onPick(it.value);
     };
-    input.addEventListener('input', () => { items = search(kata(input.value)); cur = items.length ? 0 : -1; draw(); });
+    // リスト内(スクロールバーや余白を含む)を押しても入力欄のフォーカスを奪わない
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    input.addEventListener('compositionstart', () => { composing = true; });
+    input.addEventListener('compositionend', () => { composing = false; });
+    input.addEventListener('input', () => {
+      if (picking) return; // 確定処理中の入力イベントでリストを開き直さない
+      items = search(kata(input.value)); cur = items.length ? 0 : -1; draw();
+    });
     input.addEventListener('blur', close);
     input.addEventListener('keydown', (e) => {
       if (e.isComposing || e.keyCode === 229) return; // IME変換中のキーは無視

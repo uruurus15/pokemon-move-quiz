@@ -89,13 +89,14 @@
       const it = items[n]; if (!it || it.used) return;
       close(); items = [];
       picking = true;
-      // 変換中に値を書き換えるとIMEが固まり、入力欄を押し直すまで打てなくなるため、
-      // いったんフォーカスを外して変換を確定させてから値を入れ替える
-      // (タッチ操作ではblurするとキーボードが閉じるため、フォーカスを保ったまま値だけ入れ替える)
-      if (composing && !touch) input.blur();
+      // 変換中(iPadのSafariでは変換前の文字を含む)に値を書き換えると入力状態がずれて、
+      // キーボードが開いたまま入力できなくなる(入力欄を押し直すまで打てない)。
+      // そのため、同じタップ/クリックの処理の中でいったんフォーカスを外して変換を確定・リセットし、
+      // 値を入れ替えてすぐフォーカスを戻す(同期的に行うのでキーボードは閉じない)
+      if (composing || touch) input.blur();
       composing = false;
       input.value = keep ? it.label : '';
-      input.focus(); // 続けて入力できるようフォーカスを保つ
+      input.focus({ preventScroll: true }); // 続けて入力できるようフォーカスを保つ
       picking = false;
       if (document.activeElement !== input) setTimeout(() => input.focus(), 0);
       onPick(it.value);

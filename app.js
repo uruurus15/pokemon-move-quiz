@@ -54,8 +54,9 @@
     candidates().forEach((i) => { const li = document.createElement('li'); li.textContent = MONS[i].name; ul.appendChild(li); });
   }
 
-  // keep=true: 選んだ名前を入力欄に残す(別ボタンで確定する欄用)
-  function combo(input, list, search, onPick, keep = false) {
+  // keep=true: 選んだ名前を入力欄に残す(別ボタンで確定する欄用)。onType: 入力のたびに呼ぶ
+  // 候補確定時に入力欄の要素を差し替えることがあるため、入力欄は毎回 $(id) で取得すること
+  function combo(input, list, search, onPick, keep = false, onType = null) {
     let items = [], cur = -1;
     let composing = false, picking = false; // IME変換中 / 候補確定の処理中
     let lastTouch = 0; // 直近のタッチ確定時刻(後続の疑似マウスイベントを無視する)
@@ -89,34 +90,50 @@
       const it = items[n]; if (!it || it.used) return;
       close(); items = [];
       picking = true;
-      // 変換中(iPadのSafariでは変換前の文字を含む)に値を書き換えると入力状態がずれて、
-      // キーボードが開いたまま入力できなくなる(入力欄を押し直すまで打てない)。
-      // そのため、同じタップ/クリックの処理の中でいったんフォーカスを外して変換を確定・リセットし、
-      // 値を入れ替えてすぐフォーカスを戻す(同期的に行うのでキーボードは閉じない)
-      if (composing || touch) input.blur();
+      const value = keep ? it.label : '';
+      if (composing || touch) {
+        // 変換中の入力欄の値を書き換えると、iPadのSafariではキーボード側に前の変換が残り、
+        // 入力欄を押し直すまで打てなくなる(フォーカスを外して戻すだけでは残る)。
+        // 新しい入力欄に差し替えて同じタップの処理内でフォーカスを移し、変換状態を持ち越さない
+        const fresh = input.cloneNode(false);
+        fresh.value = value;
+        input.before(fresh);
+        fresh.focus({ preventScroll: true });
+        // 古い入力欄はタップ処理が終わってから取り除く(処理中に消すとタッチ操作が詰まることがある)
+        const old = input; old.hidden = true; old.removeAttribute('id');
+        setTimeout(() => old.remove(), 0);
+        input = fresh;
+        wire(input);
+      } else {
+        input.value = value;
+        input.focus({ preventScroll: true }); // 続けて入力できるようフォーカスを保つ
+      }
       composing = false;
-      input.value = keep ? it.label : '';
-      input.focus({ preventScroll: true }); // 続けて入力できるようフォーカスを保つ
       picking = false;
       if (document.activeElement !== input) setTimeout(() => input.focus(), 0);
       onPick(it.value);
     };
     // リスト内(スクロールバーや余白を含む)を押しても入力欄のフォーカスを奪わない
     list.addEventListener('mousedown', (e) => e.preventDefault());
-    input.addEventListener('compositionstart', () => { composing = true; });
-    input.addEventListener('compositionend', () => { composing = false; });
-    input.addEventListener('input', () => {
-      if (picking) return; // 確定処理中の入力イベントでリストを開き直さない
-      items = search(kata(input.value)); cur = items.length ? 0 : -1; draw();
-    });
-    input.addEventListener('blur', close);
-    input.addEventListener('keydown', (e) => {
-      if (e.isComposing || e.keyCode === 229) return; // IME変換中のキーは無視
-      if (e.key === 'ArrowDown') { cur = Math.min(items.length - 1, cur + 1); draw(); e.preventDefault(); }
-      else if (e.key === 'ArrowUp') { cur = Math.max(0, cur - 1); draw(); e.preventDefault(); }
-      else if (e.key === 'Enter') pick(cur);
-      else if (e.key === 'Escape') close();
-    });
+    // 入力欄にイベントを付ける(差し替えた入力欄にも付け直す)
+    function wire(el) {
+      el.addEventListener('compositionstart', () => { composing = true; });
+      el.addEventListener('compositionend', () => { composing = false; });
+      el.addEventListener('input', () => {
+        if (picking || el !== input) return; // 確定処理中・差し替え前の入力欄のイベントは無視
+        if (onType) onType();
+        items = search(kata(el.value)); cur = items.length ? 0 : -1; draw();
+      });
+      el.addEventListener('blur', () => { if (el === input) close(); });
+      el.addEventListener('keydown', (e) => {
+        if (e.isComposing || e.keyCode === 229) return; // IME変換中のキーは無視
+        if (e.key === 'ArrowDown') { cur = Math.min(items.length - 1, cur + 1); draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { cur = Math.max(0, cur - 1); draw(); e.preventDefault(); }
+        else if (e.key === 'Enter') pick(cur);
+        else if (e.key === 'Escape') close();
+      });
+    }
+    wire(input);
   }
 
   const find = (keys, q) => {
@@ -290,8 +307,7 @@
   combo($('bPick'), $('bPickList'), (q) => {
     if (!q) return [];
     return find(monKey, q).map((i) => ({ value: i, label: MONS[i].name, sub: '#' + MONS[i].dex }));
-  }, (i) => { bPickIdx = i; }, true);
-  $('bPick').addEventListener('input', () => { bPickIdx = null; });
+  }, (i) => { bPickIdx = i; }, true, () => { bPickIdx = null; });
   $('bPickBtn').addEventListener('click', () => {
     let i = bPickIdx;
     if (i === null) { const k = kata($('bPick').value); i = k ? monKey.indexOf(k) : -1; if (i < 0) i = null; }
